@@ -1,126 +1,75 @@
 name: Pipeline Precios Luparte
 
 on:
-  # Ejecutar cada 20 días automáticamente
   schedule:
     - cron: "0 6 */20 * *"
-  # También permite ejecución manual desde GitHub
   workflow_dispatch:
 
 jobs:
   pipeline:
     runs-on: ubuntu-latest
-    timeout-minutes: 120  # máximo 2 horas antes de cancelar
-
+    timeout-minutes: 120
     permissions:
-      contents: write  # necesario para crear el release
-
+      contents: write
     steps:
-      # ── Checkout ──────────────────────────────────────────────────────────
       - name: Checkout repo
         uses: actions/checkout@v4
 
-      # ── Python ────────────────────────────────────────────────────────────
       - name: Setup Python 3.11
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
           cache: "pip"
 
-      # ── Dependencias ──────────────────────────────────────────────────────
-      - name: Instalar dependencias Python
+      - name: Instalar dependencias
         run: |
           pip install --upgrade pip
-          pip install \
-            curl-cffi \
-            parsel \
-            crawl4ai \
-            scrapy \
-            scrapy-playwright \
-            requests \
-            lxml
+          pip install curl-cffi parsel crawl4ai scrapy scrapy-playwright requests lxml
 
-      # ── Playwright browsers ───────────────────────────────────────────────
-      - name: Instalar Playwright + Chromium
+      - name: Instalar Playwright
         run: |
           python -m playwright install chromium
           python -m playwright install-deps chromium
 
-      # ── Crawl4AI setup ────────────────────────────────────────────────────
       - name: Setup Crawl4AI
-        run: |
-          python -c "import crawl4ai; crawl4ai.setup()"
+        run: python -c "import crawl4ai; crawl4ai.setup()"
 
-      # ── Crear directorio de bases de datos ────────────────────────────────
       - name: Crear carpeta db
         run: mkdir -p db
 
-      # ── Ejecutar pipeline ─────────────────────────────────────────────────
-      - name: Ejecutar pipeline de precios
+      - name: Ejecutar pipeline
         run: |
           cd pipeline
           python main.py
         env:
           PYTHONPATH: ${{ github.workspace }}/scrapers:${{ github.workspace }}/pipeline
 
-      # ── Verificar que se generaron las bases ──────────────────────────────
       - name: Verificar bases de datos
         run: |
-          echo "=== productos.db ==="
           python -c "
           import sqlite3
           con = sqlite3.connect('db/productos.db')
           count = con.execute('SELECT COUNT(*) FROM productos').fetchone()[0]
-          print(f'  {count:,} precios de productos')
-          
-          print('  Muestra por cadena:')
-          for row in con.execute('SELECT cadena, COUNT(*) FROM productos GROUP BY cadena ORDER BY COUNT(*) DESC'):
-              print(f'    {row[0]}: {row[1]:,}')
+          print(f'productos.db: {count:,} precios')
           con.close()
-          "
-          
-          echo "=== servicios.db ==="
-          python -c "
-          import sqlite3
           con = sqlite3.connect('db/servicios.db')
           count = con.execute('SELECT COUNT(*) FROM servicios').fetchone()[0]
-          print(f'  {count:,} precios de servicios')
-          
-          print('  Muestra por cadena:')
-          for row in con.execute('SELECT cadena, COUNT(*) FROM servicios GROUP BY cadena ORDER BY COUNT(*) DESC'):
-              print(f'    {row[0]}: {row[1]:,}')
+          print(f'servicios.db: {count:,} precios')
           con.close()
           "
 
-      # ── Leer versión generada ─────────────────────────────────────────────
-      - name: Leer versión
+      - name: Leer version
         id: version
         run: |
           VERSION=$(cat db/version.txt)
           echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "Versión: $VERSION"
 
-      # ── Crear release con las dos bases ───────────────────────────────────
-      - name: Crear release en GitHub
+      - name: Crear release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: "precios-${{ steps.version.outputs.version }}"
           name: "Precios ${{ steps.version.outputs.version }}"
-          body: |
-            ## Base de datos de precios Luparte
-            Fecha de generación: ${{ steps.version.outputs.version }}
-            
-            ### Archivos
-            - `productos.db` — precios de productos (supermercados, farmacias, electrónica)
-            - `servicios.db` — precios de servicios (restaurantes, etc.)
-            
-            ### Fuentes
-            - Profeco QQP (datos oficiales verificados en campo)
-            - Walmart / Bodega Aurrerá / Sam's Club
-            - Soriana / Chedraui / La Comer / H-E-B
-            - Steren / Liverpool
-            - Farmacias Guadalajara / del Ahorro / Benavides
-            - Domino's México / Coppel
+          body: "Base de datos de precios Luparte - ${{ steps.version.outputs.version }}"
           files: |
             db/productos.db
             db/servicios.db
