@@ -1,0 +1,20 @@
+# Bases de datos generadas — no se suben al repo, se publican como release
+db/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.env
+
+# Scrapy
+.scrapy/
+
+# Playwright
+playwright-report/
+
+# OS
+.DS_Store
+Thumbs.db
