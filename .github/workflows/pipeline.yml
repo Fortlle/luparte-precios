@@ -1,10 +1,8 @@
 name: Pipeline Precios Luparte
-
 on:
   schedule:
     - cron: "0 6 */20 * *"
   workflow_dispatch:
-
 jobs:
   pipeline:
     runs-on: ubuntu-latest
@@ -12,69 +10,25 @@ jobs:
     permissions:
       contents: write
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
-
-      - name: Setup Python 3.11
-        uses: actions/setup-python@v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-          cache: "pip"
-
-      - name: Instalar dependencias
-        run: |
-          pip install --upgrade pip
-          pip install curl-cffi parsel crawl4ai scrapy scrapy-playwright requests lxml
-
-      - name: Instalar Playwright
-        run: |
-          python -m playwright install chromium
-          python -m playwright install-deps chromium
-
-      - name: Setup Crawl4AI
-        run: python -c "import crawl4ai; crawl4ai.setup()"
-
-      - name: Crear carpeta db
-        run: mkdir -p db
-
+      - run: pip install curl-cffi parsel crawl4ai scrapy scrapy-playwright requests lxml
+      - run: python -m playwright install chromium --with-deps
+      - run: mkdir -p db
       - name: Ejecutar pipeline
-        run: |
-          cd pipeline
-          python main.py
+        run: python pipeline/main.py
         env:
           PYTHONPATH: ${{ github.workspace }}/scrapers:${{ github.workspace }}/pipeline
-
-      - name: Verificar bases de datos
-        run: |
-          python -c "
-          import sqlite3
-          con = sqlite3.connect('db/productos.db')
-          count = con.execute('SELECT COUNT(*) FROM productos').fetchone()[0]
-          print(f'productos.db: {count:,} precios')
-          con.close()
-          con = sqlite3.connect('db/servicios.db')
-          count = con.execute('SELECT COUNT(*) FROM servicios').fetchone()[0]
-          print(f'servicios.db: {count:,} precios')
-          con.close()
-          "
-
       - name: Leer version
         id: version
-        run: |
-          VERSION=$(cat db/version.txt)
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-
-      - name: Crear release
-        uses: softprops/action-gh-release@v2
+        run: echo "version=$(cat db/version.txt)" >> $GITHUB_OUTPUT
+      - uses: softprops/action-gh-release@v2
         with:
           tag_name: "precios-${{ steps.version.outputs.version }}"
           name: "Precios ${{ steps.version.outputs.version }}"
-          body: "Base de datos de precios Luparte - ${{ steps.version.outputs.version }}"
-          files: |
-            db/productos.db
-            db/servicios.db
-            db/version.txt
+          files: db/productos.db db/servicios.db db/version.txt
           make_latest: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
