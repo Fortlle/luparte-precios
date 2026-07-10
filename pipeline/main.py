@@ -1,10 +1,11 @@
 """
-Pipeline principal — luparte-precios
+Pipeline principal — luparte-precios v2
 Orden:
-1. Profeco QQP (CSV oficial)
-2. Walmart / Bodega / Sam's (curl_cffi + __NEXT_DATA__)
-3. Scrapling StealthyFetcher (Soriana, Chedraui, La Comer, HEB, Steren, Liverpool, Farmacias)
-4. Scrapy + Playwright (Coppel, Domino's)
+1. Profeco QQP (CSV oficial — más confiable)
+2. Walmart curl_cffi + __NEXT_DATA__
+3. Chedraui API interna VTEX (sin browser, JSON directo)
+4. Soriana via sitemap XML + Scrapling
+5. Scrapy + Playwright (Coppel, Domino's)
 """
 
 import sys
@@ -35,10 +36,12 @@ def ejecutar(nombre, fn):
     t = time.time()
     try:
         r = fn()
-        print(f"  [{nombre}] ✓ completado en {round(time.time()-t,1)}s")
+        dur = round(time.time() - t, 1)
+        print(f"  [{nombre}] ✓ completado en {dur}s")
         return r or 0
     except Exception as e:
-        print(f"  [{nombre}] ✗ error en {round(time.time()-t,1)}s: {e}")
+        dur = round(time.time() - t, 1)
+        print(f"  [{nombre}] ✗ error en {dur}s: {e}")
         return 0
 
 
@@ -48,39 +51,55 @@ def main():
     print(f"  LUPARTE PRECIOS — {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"{'='*50}")
 
-    print("\n[1/6] Inicializando bases...")
+    print("\n[1/7] Inicializando bases...")
     init_productos()
     init_servicios()
 
-    print("\n[2/6] Limpiando datos anteriores...")
+    print("\n[2/7] Limpiando datos anteriores...")
     limpiar_tablas()
 
-    print("\n[3/6] Profeco QQP...")
+    print("\n[3/7] Profeco QQP (fuente oficial)...")
     from scraper_profeco import scrape as sp
     ejecutar("Profeco", sp)
 
-    print("\n[4/6] Walmart + Bodega + Sam's (curl_cffi)...")
+    print("\n[4/7] Walmart + Bodega + Sam's (curl_cffi + __NEXT_DATA__)...")
     from scraper_walmart import scrape as sw
     ejecutar("Walmart", sw)
 
-    print("\n[5/6] Scrapling (Soriana, Chedraui, La Comer, HEB, Steren, Liverpool, Farmacias)...")
-    from scraper_scrapling import scrape as ss
-    ejecutar("Scrapling", ss)
+    print("\n[5/7] Chedraui (API interna VTEX)...")
+    from scraper_chedraui_api import scrape as sc
+    ejecutar("Chedraui API", sc)
 
-    print("\n[6/6] Scrapy (Coppel, Domino's)...")
-    from scraper_scrapy import scrape as sc
-    ejecutar("Scrapy", sc)
+    print("\n[6/7] Soriana (sitemap XML + Scrapling)...")
+    from scraper_sitemap import scrape as ss
+    ejecutar("Soriana Sitemap", ss)
 
-    # Reporte
+    print("\n[7/7] Scrapy + Playwright (Coppel, Domino's)...")
+    from scraper_scrapy import scrape as scrapy_scrape
+    ejecutar("Scrapy", scrapy_scrape)
+
+    # Reporte final
     tp = contar(PRODUCTOS_DB, "productos")
     ts = contar(SERVICIOS_DB, "servicios")
+
     print(f"\n{'='*50}")
     print(f"  REPORTE FINAL")
     print(f"{'='*50}")
     print(f"  productos.db → {tp:,}")
     print(f"  servicios.db  → {ts:,}")
     print(f"  Total         → {tp+ts:,}")
-    print(f"  Duración      → {round(time.time()-inicio,1)}s")
+    print(f"  Duración      → {round(time.time()-inicio, 1)}s")
+
+    # Desglose por fuente
+    try:
+        con = sqlite3.connect(PRODUCTOS_DB)
+        print(f"\n  Por fuente:")
+        for r in con.execute("SELECT fuente, COUNT(*) FROM productos GROUP BY fuente ORDER BY COUNT(*) DESC"):
+            print(f"    {r[0]}: {r[1]:,}")
+        con.close()
+    except Exception:
+        pass
+
     print(f"{'='*50}\n")
 
     version = datetime.now().strftime("%Y-%m-%d")
