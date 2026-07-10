@@ -1,6 +1,6 @@
 curl-cffi>=0.7.0
 parsel>=1.9.0
-crawl4ai>=0.4.0
+scrapling>=0.3.0
 scrapy>=2.11.0
 scrapy-playwright>=0.0.40
 requests>=2.31.0

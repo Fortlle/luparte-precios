@@ -13,24 +13,66 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - run: pip install curl-cffi parsel crawl4ai scrapy scrapy-playwright requests lxml
-      - run: python -m playwright install chromium --with-deps
-      - run: mkdir -p db
+          cache: "pip"
+
+      - name: Instalar dependencias
+        run: |
+          pip install --upgrade pip
+          pip install \
+            curl-cffi \
+            parsel \
+            scrapling \
+            scrapy \
+            scrapy-playwright \
+            requests \
+            lxml
+
+      - name: Instalar Playwright + Chromium
+        run: |
+          python -m playwright install chromium
+          python -m playwright install-deps chromium
+
+      - name: Setup Scrapling
+        run: python -c "from scrapling.fetchers import StealthyFetcher; print('Scrapling OK')"
+
+      - name: Crear carpeta db
+        run: mkdir -p db
+
       - name: Ejecutar pipeline
         run: python pipeline/main.py
         env:
           PYTHONPATH: ${{ github.workspace }}/scrapers:${{ github.workspace }}/pipeline
+
+      - name: Verificar bases
+        run: |
+          python -c "
+          import sqlite3
+          for db, tabla in [('db/productos.db','productos'),('db/servicios.db','servicios')]:
+              con = sqlite3.connect(db)
+              n = con.execute(f'SELECT COUNT(*) FROM {tabla}').fetchone()[0]
+              print(f'{db}: {n:,} registros')
+              for r in con.execute(f'SELECT fuente, COUNT(*) FROM {tabla} GROUP BY fuente ORDER BY COUNT(*) DESC'):
+                  print(f'  {r[0]}: {r[1]:,}')
+              con.close()
+          "
+
       - name: Leer version
         id: version
         run: echo "version=$(cat db/version.txt)" >> $GITHUB_OUTPUT
+
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: "precios-${{ steps.version.outputs.version }}"
           name: "Precios ${{ steps.version.outputs.version }}"
-          files: db/productos.db db/servicios.db db/version.txt
+          body: "Base de datos de precios Luparte - ${{ steps.version.outputs.version }}"
+          files: |
+            db/productos.db
+            db/servicios.db
+            db/version.txt
           make_latest: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
