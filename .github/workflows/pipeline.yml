@@ -26,17 +26,19 @@ jobs:
             curl-cffi \
             parsel \
             scrapling \
+            patchright \
             scrapy \
             scrapy-playwright \
             requests \
             lxml
 
-      - name: Instalar Playwright + Chromium
+      - name: Instalar browsers
         run: |
+          python -m patchright install chromium
           python -m playwright install chromium
           python -m playwright install-deps chromium
 
-      - name: Setup Scrapling
+      - name: Verificar Scrapling
         run: python -c "from scrapling.fetchers import StealthyFetcher; print('Scrapling OK')"
 
       - name: Crear carpeta db
