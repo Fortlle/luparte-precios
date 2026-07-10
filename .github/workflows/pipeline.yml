@@ -22,11 +22,10 @@ jobs:
       - name: Instalar dependencias
         run: |
           pip install --upgrade pip
+          pip install "scrapling[all]"
           pip install \
             curl-cffi \
             parsel \
-            scrapling \
-            patchright \
             scrapy \
             scrapy-playwright \
             requests \
